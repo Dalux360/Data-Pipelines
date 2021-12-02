@@ -1,0 +1,69 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: File gateway instance
+Parameters:
+  KeyNameParam:
+    Description: Select a keypair
+    Type: 'AWS::EC2::KeyPair::KeyName'
+  VPC:
+    Description: Select a VPC to place the resources into
+    Type: 'AWS::EC2::VPC::Id'
+  Subnet:
+    Description: Select a subnet within the VPC
+    Type: 'AWS::EC2::Subnet::Id'
+  SecurityGroupIds:
+    Description: Select one or more security groups for your instances
+    Type: List<AWS::EC2::SecurityGroup::Id>
+  LatestWindowsAmiId:
+    Description: Select a windows AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-windows-latest/Windows_Server-2019-English-Full-Base
+Resources:
+  WindowsInstanceRole:
+    Description: IAM role that will be assigned to the Windows-based EC2 instance, allowing it to interact with other AWS services
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+  WindowsInstanceProfile:
+    Description: This is an IAM instance profile that allows us to attach the WindowsInstanceRole created above to an EC2 instance
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Path: /
+      Roles: 
+        - !Ref WindowsInstanceRole
+  WindowsInstanceRolePolicy:
+    Description: The IAM policy to be associated with the above-defined IAM role. This policy enables read-only access to all S3 buckets within your account
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "Windows-client-${AWS::StackName}"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - 's3:Get*'
+              - 's3:List*'
+            Resource: 'arn:aws:s3:::'
+      Roles: 
+        - !Ref WindowsInstanceRole
+  WindowsInstance:
+    Description: The Windows EC2 instance represents an on-premise corporate machine which has network access to the private file server (Linux instance)
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestWindowsAmiId
+      KeyName: !Ref KeyNameParam
+      InstanceType: t2.micro
+      SecurityGroupIds: !Ref SecurityGroupIds
+      SubnetId: !Ref Subnet
+      IamInstanceProfile: !Ref WindowsInstanceProfile
+      Tags:
+        - Key: Name
+          Value: DE-Extract-Windows-Instance
